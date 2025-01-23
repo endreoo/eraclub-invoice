@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 function Settings({ isOpen, onClose }) {
   const [emails, setEmails] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const apiUrl = 'http://37.27.142.148:3000';
 
   useEffect(() => {
     if (isOpen) {
@@ -19,23 +18,21 @@ function Settings({ isOpen, onClose }) {
         return;
       }
 
-      const response = await fetch(`${apiUrl}/veraclub/emails`, {
+      const response = await fetch('/veraclub/emails', {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Origin': window.location.origin
+          'Authorization': `Bearer ${token}`
         },
-        credentials: 'include',
-        mode: 'cors'
+        credentials: 'include'
       });
+      
       if (response.ok) {
-        const emails = await response.json();
-        console.log('Loaded emails:', emails);
-        setEmails(emails.join('\n'));
+        const emailList = await response.json();
+        console.log('Loaded emails:', emailList);
+        setEmails(emailList.join('\n'));
       } else {
-        const error = await response.text();
+        const error = await response.json();
         console.error('Server error:', error);
       }
     } catch (error) {
@@ -52,19 +49,15 @@ function Settings({ isOpen, onClose }) {
       }
 
       const emailList = emails.split('\n').map(email => email.trim()).filter(email => email);
-      console.log('Saving emails:', emailList);
       
-      // First, get existing emails to determine what needs to be added/removed
-      const response = await fetch(`${apiUrl}/veraclub/emails`, {
+      // Get current emails to determine what to add/remove
+      const response = await fetch('/veraclub/emails', {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Origin': window.location.origin
+          'Authorization': `Bearer ${token}`
         },
-        credentials: 'include',
-        mode: 'cors'
+        credentials: 'include'
       });
       
       if (response.ok) {
@@ -73,15 +66,12 @@ function Settings({ isOpen, onClose }) {
         // Remove emails that are no longer in the list
         for (const existingEmail of existingEmails) {
           if (!emailList.includes(existingEmail)) {
-            await fetch(`${apiUrl}/veraclub/emails/${encodeURIComponent(existingEmail)}`, {
+            await fetch(`/veraclub/emails/${encodeURIComponent(existingEmail)}`, {
               method: 'DELETE',
               headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Origin': window.location.origin
+                'Authorization': `Bearer ${token}`
               },
-              credentials: 'include',
-              mode: 'cors'
+              credentials: 'include'
             });
           }
         }
@@ -89,16 +79,14 @@ function Settings({ isOpen, onClose }) {
         // Add new emails
         for (const email of emailList) {
           if (!existingEmails.includes(email)) {
-            await fetch(`${apiUrl}/veraclub/emails`, {
+            await fetch('/veraclub/emails', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-                'Origin': window.location.origin
+                'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({ email }),
-              credentials: 'include',
-              mode: 'cors'
+              credentials: 'include'
             });
           }
         }

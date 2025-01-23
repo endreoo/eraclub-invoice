@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import config from '../config/config';
 
 function Login() {
   const [email, setEmail] = useState(import.meta.env.VITE_CRM_EMAIL || '');
@@ -7,7 +8,6 @@ function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const apiUrl = 'http://37.27.142.148:3000';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,29 +15,28 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      const response = await fetch('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': window.location.origin
+          'Accept': 'application/json'
         },
         credentials: 'include',
         body: JSON.stringify({ email, password })
       });
 
+      const data = await response.json();
+      
       if (response.ok) {
-        const data = await response.json();
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         navigate('/dashboard');
       } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Login failed');
+        setError(data.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Failed to connect to server');
+      setError('Network error - please check your connection and try again');
     } finally {
       setIsLoading(false);
     }

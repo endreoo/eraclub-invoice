@@ -1,5 +1,14 @@
-const API_URL = window.location.origin;
-const EZEE_API_URL = 'http://37.27.142.148:3000';
+const API_URL = '/api';
+
+// Helper function to round to nearest .50 or .00
+function roundToNearestHalf(num) {
+  // Convert to cents to avoid floating point issues
+  const cents = Math.round(num * 100);
+  // Round to nearest 50 cents
+  const roundedCents = Math.round(cents / 50) * 50;
+  // Convert back to dollars
+  return roundedCents / 100;
+}
 
 class InvoiceService {
   async getAllInvoices() {
@@ -20,7 +29,7 @@ class InvoiceService {
 
   async getBookingDetails(hotelId, authKey, bookingId) {
     const token = localStorage.getItem('token');
-    const response = await fetch(`${EZEE_API_URL}/ezee/bookings`, {
+    const response = await fetch(`${API_URL}/ezee/bookings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,6 +97,9 @@ class InvoiceService {
         // Format dates for display
         const formatDate = (date) => date.toLocaleDateString('en-GB');
         
+        // Calculate total and round only the final amount
+        const total = roundToNearestHalf(ratePerNight * nights * 1.15);
+        
         return {
           description: description,
           checkIn: formatDate(startDate),
@@ -95,7 +107,7 @@ class InvoiceService {
           nights: nights,
           ratePerNight: ratePerNight,
           vat: 15, // Fixed 15% VAT rate
-          total: ratePerNight * nights * 1.15 // Total including VAT
+          total: total
         };
       });
 
@@ -103,10 +115,11 @@ class InvoiceService {
       throw new Error('No valid bookings found for this reservation number');
     }
 
-    // Calculate grand totals
-    const totalSubtotal = lineItems.reduce((sum, item) => sum + (item.ratePerNight * item.nights), 0);
-    const totalVAT = totalSubtotal * 0.15;
-    const grandTotal = totalSubtotal * 1.15;
+    // Calculate grand total by summing the already-rounded line totals
+    const grandTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+    // Calculate subtotal and VAT from the grand total
+    const totalSubtotal = grandTotal / 1.15;
+    const totalVAT = grandTotal - totalSubtotal;
 
     const firstBooking = data.Reservations.Reservation[0];
     const firstBookingTran = firstBooking.BookingTran[0];

@@ -33,6 +33,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     color: '#4f46e5',
   },
+  billTo: {
+    marginTop: 20,
+    marginBottom: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  billToTitle: {
+    fontSize: 12,
+    fontFamily: 'Helvetica-Bold',
+    color: '#4f46e5',
+    marginBottom: 8,
+  },
+  billToName: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    color: '#111827',
+    marginTop: 4,
+  },
   invoiceInfo: {
     width: '40%',
     backgroundColor: '#f8fafc',
@@ -143,9 +162,9 @@ interface InvoiceItem {
 
 interface InvoiceData {
   date: string;
-  dueDate: string;
   invoiceNumber: string;
   reservation: string;
+  customerName: string;
   items: InvoiceItem[];
   subtotal: number;
   vatAmount: number;
@@ -161,31 +180,28 @@ export const InvoiceTemplate = ({ hotel, invoiceData }: InvoiceProps): JSX.Eleme
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.topSection}>
-        {/* Company Details */}
         <View style={styles.companyDetails}>
-          <Text style={styles.companyName}>Veraclub Zanzibar LTD</Text>
-          <Text style={styles.hotelName}>{hotel}</Text>
+          <Text style={styles.companyName}>{hotel === 'Sunset Beach' ? 'Sunset Beach Hotel' : 'Zanzibar Village Hotel'}</Text>
           <Text>Kiwengwa-Zanzibar (Tanzania)</Text>
           <Text>P.O Box 2529</Text>
           <Text>TINN: 300-101-496</Text>
-          <Text>Reg No: Z0000007238</Text>
-          <Text>Tel: 0779-414986</Text>
-          <Text>Account: 0400392000</Text>
-          <Text>Swift: PBZATZTZ</Text>
-        </View>
-
-        {/* Invoice Info */}
-        <View style={styles.invoiceInfo}>
-          <View>
-            <Text style={styles.infoLabel}>Invoice #</Text>
-            <Text style={styles.infoValue}>{invoiceData.invoiceNumber}</Text>
-            <Text style={[styles.infoLabel, { marginTop: 8 }]}>Reservation</Text>
-            <Text style={styles.infoValue}>{invoiceData.reservation}</Text>
-            <Text style={[styles.infoLabel, { marginTop: 8 }]}>Date</Text>
-            <Text style={styles.infoValue}>{invoiceData.date}</Text>
-            <Text style={[styles.infoLabel, { marginTop: 8 }]}>Due Date</Text>
-            <Text style={styles.infoValue}>{invoiceData.dueDate}</Text>
+          <Text>Registration No: Z0000007238</Text>
+          <Text>Phone: 0779-414986</Text>
+          <Text>Account No: 0400392000</Text>
+          <Text>Swift Code: PBZATZTZ</Text>
+          
+          <View style={styles.billTo}>
+            <Text style={styles.billToTitle}>Bill To:</Text>
+            <Text style={styles.billToName}>
+              {invoiceData.customerName || 'No Customer Name'}
+            </Text>
           </View>
+        </View>
+        <View style={styles.invoiceInfo}>
+          <Text style={styles.infoLabel}>Date</Text>
+          <Text style={styles.infoValue}>{invoiceData.date}</Text>
+          <Text style={styles.infoLabel}>Reservation Number</Text>
+          <Text style={styles.infoValue}>{invoiceData.reservation}</Text>
         </View>
       </View>
 

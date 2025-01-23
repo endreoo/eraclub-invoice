@@ -12,6 +12,7 @@ function InvoicePreview({ invoice, onClose }) {
     dueDate: new Date(invoice.dueDate).toLocaleDateString('en-GB'),
     invoiceNumber: invoice.invoiceNumber,
     reservation: invoice.reservationNumber,
+    customerName: invoice.customerName,
     items: invoice.items.map(item => ({
       description: item.description,
       checkIn: new Date(item.checkIn).toLocaleDateString('en-GB'),
@@ -49,7 +50,7 @@ function InvoicePreview({ invoice, onClose }) {
       console.log('PDF generated for email');
       
       // Get default emails and clean them
-      const apiUrl = 'http://37.27.142.148:5171';
+      const apiUrl = '/api';
       const defaultEmailsResponse = await fetch(`${apiUrl}/settings/emails`, {
         headers: {
           'Accept': 'text/plain',
@@ -88,7 +89,7 @@ function InvoicePreview({ invoice, onClose }) {
             }]
           };
 
-          const response = await fetch('http://37.27.142.148:3000/email/send', {
+          const response = await fetch(`${apiUrl}/email/send`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

@@ -1,9 +1,18 @@
 const pool = require('../config/database');
 
+// Helper function to round to nearest .50 or .00
+function roundToNearestHalf(num) {
+  return Math.round(num * 2) / 2;
+}
+
 class InvoiceService {
   async saveOrUpdateGuest(guestData) {
     const connection = await pool.getConnection();
     try {
+      // Round the amounts
+      guestData.total_amount_before_tax = roundToNearestHalf(parseFloat(guestData.total_amount_before_tax));
+      guestData.total_amount_after_tax = roundToNearestHalf(parseFloat(guestData.total_amount_after_tax));
+
       // Check if guest exists
       const [existingGuest] = await connection.query(
         'SELECT id FROM vera_guests WHERE booking_id = ?',
@@ -60,6 +69,16 @@ class InvoiceService {
   async saveOrUpdateInvoice(invoiceData) {
     const connection = await pool.getConnection();
     try {
+      // Round all monetary values
+      invoiceData.items = invoiceData.items.map(item => ({
+        ...item,
+        amount: roundToNearestHalf(parseFloat(item.amount))
+      }));
+      
+      invoiceData.subtotal = roundToNearestHalf(parseFloat(invoiceData.subtotal));
+      invoiceData.tax_amount = roundToNearestHalf(parseFloat(invoiceData.tax_amount));
+      invoiceData.total = roundToNearestHalf(parseFloat(invoiceData.total));
+
       // Check if invoice exists
       const [existingInvoice] = await connection.query(
         'SELECT id FROM vera_invoices WHERE booking_id = ?',

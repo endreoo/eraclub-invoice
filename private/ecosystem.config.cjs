@@ -8,7 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 5172,
-        VITE_API_URL: 'http://37.27.142.148:5171'
+        VITE_API_URL: '/api'
       },
       instances: 1,
       autorestart: true,
@@ -17,21 +17,19 @@ module.exports = {
     },
     {
       name: 'vera-server',
-      script: 'src/server/server.js',
+      script: 'npm',
+      args: 'run start',
       cwd: './',
       env: {
         NODE_ENV: 'production',
-        PORT: 5171,
-        JWT_SECRET: 'hotelonline-api-secret-key',
+        PORT: 3000,
         API_BASE_URL: 'http://37.27.142.148:3000',
         CORS_ORIGIN: 'http://37.27.142.148:5172'
       },
       instances: 1,
       autorestart: true,
       watch: false,
-      max_memory_restart: '1G',
-      interpreter: 'node',
-      interpreter_args: '--experimental-modules'
+      max_memory_restart: '1G'
     }
   ]
 }; 

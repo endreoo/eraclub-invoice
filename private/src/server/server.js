@@ -14,14 +14,14 @@ const __dirname = dirname(__filename);
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5171;
+const PORT = process.env.PORT || 3000;
 
 // Add JWT secret to environment
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'hotelonline-secret-key';
 
 // CORS Configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://37.27.142.148:5172',
+  origin: process.env.CORS_ORIGIN || 'http://37.27.142.148:3000',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: true,
@@ -48,31 +48,74 @@ app.use((req, res, next) => {
 // API Routes FIRST - before any static file handling
 app.use('/auth', authRoutes);
 
-// Settings file handling
-app.get('/settings/emails', async (req, res) => {
+// Email settings endpoints
+app.get('/veraclub/emails', authenticateToken, async (req, res) => {
   const filePath = join(__dirname, 'data', 'settings.txt');
   try {
-    const data = await fs.readFile(filePath, 'utf8');
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(data);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      await fs.writeFile(filePath, '');
-      res.setHeader('Content-Type', 'text/plain');
-      res.send('');
-    } else {
-      res.status(500).send('Error reading file');
+    let data = '';
+    try {
+      data = await fs.readFile(filePath, 'utf8');
+      // Convert text file content to array of emails
+      const emails = data.split('\n').filter(email => email.trim());
+      res.json(emails);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        // Create directory if it doesn't exist
+        await fs.mkdir(join(__dirname, 'data'), { recursive: true });
+        await fs.writeFile(filePath, '');
+        res.json([]);
+      } else {
+        throw error;
+      }
     }
+  } catch (error) {
+    console.error('Error reading settings:', error);
+    res.status(500).json({ message: 'Error reading settings file' });
   }
 });
 
-app.post('/settings/emails', express.text(), async (req, res) => {
+app.post('/veraclub/emails', authenticateToken, async (req, res) => {
   const filePath = join(__dirname, 'data', 'settings.txt');
   try {
-    await fs.writeFile(filePath, req.body);
-    res.send('OK');
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    let emails = [];
+    try {
+      const data = await fs.readFile(filePath, 'utf8');
+      emails = data.split('\n').filter(e => e.trim());
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    if (!emails.includes(email)) {
+      emails.push(email);
+      await fs.mkdir(join(__dirname, 'data'), { recursive: true });
+      await fs.writeFile(filePath, emails.join('\n'));
+    }
+
+    res.json({ message: 'Email added successfully' });
   } catch (error) {
-    res.status(500).send('Error writing file');
+    console.error('Error saving email:', error);
+    res.status(500).json({ message: 'Error saving email' });
+  }
+});
+
+app.delete('/veraclub/emails/:email', authenticateToken, async (req, res) => {
+  const filePath = join(__dirname, 'data', 'settings.txt');
+  try {
+    const emailToDelete = decodeURIComponent(req.params.email);
+    let data = await fs.readFile(filePath, 'utf8');
+    const emails = data.split('\n').filter(email => email.trim() && email !== emailToDelete);
+    await fs.writeFile(filePath, emails.join('\n'));
+    res.json({ message: 'Email removed successfully' });
+  } catch (error) {
+    console.error('Error removing email:', error);
+    res.status(500).json({ message: 'Error removing email' });
   }
 });
 

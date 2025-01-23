@@ -1,4 +1,4 @@
-const API_URL = 'http://37.27.142.148:3000';
+const API_URL = '/api';
 
 export const veraGuestService = {
   async createOrUpdateGuest(guestData) {

@@ -6,7 +6,7 @@ interface User {
 
 export async function login(email: string, password: string): Promise<User> {
   try {
-    const response = await fetch('http://37.27.142.148:3000/auth/login', {
+    const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

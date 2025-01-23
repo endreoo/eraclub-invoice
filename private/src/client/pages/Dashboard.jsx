@@ -7,6 +7,16 @@ import EmailDialog from '../components/EmailDialog';
 import { hotels } from '../data/hotels';
 import { pdf } from '@react-pdf/renderer';
 
+// Helper function to round to nearest .50 or .00
+function roundToNearestHalf(num) {
+  // Convert to cents to avoid floating point issues
+  const cents = Math.round(num * 100);
+  // Round to nearest 50 cents
+  const roundedCents = Math.round(cents / 50) * 50;
+  // Convert back to dollars
+  return roundedCents / 100;
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -20,6 +30,8 @@ function Dashboard() {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [selectedEmailInvoice, setSelectedEmailInvoice] = useState(null);
   const [shouldSendEmail, setShouldSendEmail] = useState(true);
+
+  const apiUrl = 'http://37.27.142.148:3000';
 
   useEffect(() => {
     if (!localStorage.getItem('token')) {
@@ -41,7 +53,6 @@ function Dashboard() {
     
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = 'http://37.27.142.148:3000'; // Fixed API endpoint
       
       console.log('Making API call to:', `${apiUrl}/ezee/bookings`);
       console.log('Request payload:', {
@@ -116,7 +127,7 @@ function Dashboard() {
           // Calculate subtotal and VAT
           const subtotal = parseFloat((ratePerNight * nights).toFixed(2));
           const vatAmount = parseFloat((subtotal * 0.15).toFixed(2));
-          const total = parseFloat((subtotal * 1.15).toFixed(2));
+          const total = roundToNearestHalf(parseFloat(ratePerNight) * nights * 1.15);
           
           // Get main guest details
           const mainGuest = `${bookingTran.Salutation} ${bookingTran.FirstName} ${bookingTran.LastName}`;
@@ -141,10 +152,9 @@ function Dashboard() {
             checkIn: bookingTran.Start,
             checkOut: bookingTran.End,
             nights: nights,
-            ratePerNight: parseFloat(ratePerNight).toFixed(2),
-            subtotal: subtotal.toFixed(2),
+            ratePerNight: parseFloat(ratePerNight),
             vat: 15, // Fixed 15% VAT rate
-            total: total.toFixed(2)
+            total: total
           };
         });
 
@@ -152,19 +162,24 @@ function Dashboard() {
         throw new Error('No valid bookings found for this reservation number');
       }
 
-      // Calculate grand totals
-      const totalSubtotal = parseFloat(lineItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0).toFixed(2));
-      const totalVAT = parseFloat((totalSubtotal * 0.15).toFixed(2));
-      const grandTotal = parseFloat((totalSubtotal * 1.15).toFixed(2));
+      // Calculate grand total from rounded line totals
+      const grandTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+      const totalSubtotal = grandTotal / 1.15;
+      const totalVAT = grandTotal - totalSubtotal;
 
       // Generate invoice from booking data
+      console.log('First booking:', firstBooking);
+      console.log('BookedBy:', firstBooking.BookedBy);
+      
+      const customerName = firstBooking.BookedBy;
+      console.log('Customer name being used:', customerName);
+
       const newInvoice = {
         id: Date.now().toString(),
         invoiceNumber: `INV-${Date.now()}`,
         reservationNumber,
         date: new Date().toISOString().split('T')[0],
-        dueDate: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
-        customerName: firstBooking.BookedBy,
+        customerName,
         customerEmail: firstBooking.Email || '',
         property: selectedHotelData.name,
         location: selectedHotelData.location,
@@ -177,7 +192,6 @@ function Dashboard() {
         items: lineItems.map(item => ({
           ...item,
           ratePerNight: parseFloat(item.ratePerNight),
-          subtotal: parseFloat(item.subtotal),
           total: parseFloat(item.total)
         })),
         subtotal: totalSubtotal,
@@ -189,14 +203,27 @@ function Dashboard() {
       setInvoices(prev => [newInvoice, ...prev]);
       setReservationNumber('');
 
-      // Automatically send email
+      // Generate PDF blob
+      const pdfBlob = await pdf(
+        <InvoiceTemplate 
+          hotel={selectedHotelData.name === 'Sunset Beach' ? 'Sunset Beach' : 'Zanzibar Village'}
+          invoiceData={{
+            date: new Date(newInvoice.date).toLocaleDateString('en-GB'),
+            invoiceNumber: newInvoice.invoiceNumber,
+            reservation: reservationNumber,
+            customerName: customerName,
+            items: newInvoice.items,
+            subtotal: newInvoice.subtotal,
+            vatAmount: newInvoice.tax,
+            total: newInvoice.total
+          }}
+        />
+      ).toBlob();
+
+      // If auto-send email is enabled, handle email sending
       if (shouldSendEmail) {
-        console.log('Starting automatic email send...');
         try {
-          const token = localStorage.getItem('token');
-          const apiUrl = 'http://37.27.142.148:3000'; // Fixed API endpoint
-          
-          // First, fetch the email recipients
+          // Fetch email recipients
           const emailResponse = await fetch(`${apiUrl}/veraclub/emails`, {
             method: 'GET',
             headers: {
@@ -204,50 +231,23 @@ function Dashboard() {
               'Content-Type': 'application/json'
             }
           });
-          
+
           if (!emailResponse.ok) {
-            const errorText = await emailResponse.text();
-            console.error('Email fetch response:', errorText);
             throw new Error(`Failed to fetch email recipients: ${emailResponse.status}`);
           }
-          
-          let recipients;
-          try {
-            recipients = await emailResponse.json();
-          } catch (e) {
-            console.error('Failed to parse email response:', e);
-            throw new Error('Invalid email recipient data received from server');
-          }
-          
-          console.log('Loaded emails:', recipients);
+
+          const recipients = await emailResponse.json();
           
           if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
             throw new Error('No email recipients configured. Please check Settings.');
           }
 
-          // Generate PDF
-          const blob = await pdf(
-            <InvoiceTemplate 
-              hotel={selectedHotelData.name === 'Sunset Beach' ? 'Sunset Beach' : 'Zanzibar Village'}
-              invoiceData={{
-                date: new Date(newInvoice.date).toLocaleDateString('en-GB'),
-                dueDate: new Date(newInvoice.dueDate).toLocaleDateString('en-GB'),
-                invoiceNumber: newInvoice.invoiceNumber,
-                reservation: newInvoice.reservationNumber,
-                items: newInvoice.items,
-                subtotal: newInvoice.subtotal,
-                vatAmount: newInvoice.tax,
-                total: newInvoice.total
-              }}
-            />
-          ).toBlob();
-
-          // Convert blob to base64
+          // Convert PDF blob to base64
           const base64data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(',')[1]);
             reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            reader.readAsDataURL(pdfBlob);
           });
 
           // Send to all recipients
@@ -280,9 +280,11 @@ function Dashboard() {
           }
           alert('Invoice Generated and Sent');
         } catch (emailError) {
-          console.error('Error sending automatic email:', emailError);
+          console.error('Error sending email:', emailError);
           alert('Invoice generated but email sending failed: ' + emailError.message);
         }
+      } else {
+        alert('Invoice Generated');
       }
     } catch (err) {
       console.error('Error details:', err);
@@ -436,7 +438,7 @@ function Dashboard() {
                               </span>
                             </div>
                             <p className="text-sm text-gray-600">
-                              Reservation: {invoice.reservationNumber} | Customer: {invoice.customerName}
+                              Reservation: {invoice.reservation} | Customer: {invoice.customerName}
                             </p>
                             <p className="text-sm text-gray-600">
                               Date: {new Date(invoice.date).toLocaleDateString('en-GB')} | Total: ${invoice.total.toFixed(2)}

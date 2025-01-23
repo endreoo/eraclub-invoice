@@ -139,7 +139,7 @@ function EmailDialog({ invoice, onClose, isOpen }) {
           }]
         };
 
-        const response = await fetch('http://37.27.142.148:3000/email/send', {
+        const response = await fetch('/api/email/send', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
