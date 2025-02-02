@@ -17,7 +17,7 @@ function EmailDialog({ invoice, onClose, isOpen }) {
 
   const fetchDefaultEmails = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL;
+      const apiUrl = 'http://37.27.142.148:3000';
       const token = localStorage.getItem('token');
       if (!token) {
         setError('Not authenticated');
@@ -35,34 +35,6 @@ function EmailDialog({ invoice, onClose, isOpen }) {
         const emails = await response.json();
         setDefaultEmails(emails);
         setSelectedEmails(emails); // Pre-select default emails
-      } else if (response.status === 401) {
-        // Token expired, try to refresh
-        const refreshResponse = await fetch(`${apiUrl}/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ token })
-        });
-        
-        if (refreshResponse.ok) {
-          const { token: newToken } = await refreshResponse.json();
-          localStorage.setItem('token', newToken);
-          // Retry with new token
-          const retryResponse = await fetch(`${apiUrl}/veraclub/emails`, {
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${newToken}`
-            }
-          });
-          if (retryResponse.ok) {
-            const emails = await retryResponse.json();
-            setDefaultEmails(emails);
-            setSelectedEmails(emails);
-          }
-        } else {
-          setError('Session expired. Please log in again.');
-        }
       } else {
         setError('Failed to load email addresses');
       }
@@ -98,18 +70,10 @@ function EmailDialog({ invoice, onClose, isOpen }) {
           hotel={invoice.property === 'Sunset Beach' ? 'Sunset Beach' : 'Zanzibar Village'}
           invoiceData={{
             date: new Date(invoice.date).toLocaleDateString('en-GB'),
-            dueDate: new Date(invoice.dueDate).toLocaleDateString('en-GB'),
             invoiceNumber: invoice.invoiceNumber,
             reservation: invoice.reservationNumber,
-            items: invoice.items.map(item => ({
-              description: item.description,
-              checkIn: new Date(item.checkIn).toLocaleDateString('en-GB'),
-              checkOut: new Date(item.checkOut).toLocaleDateString('en-GB'),
-              nights: item.nights,
-              ratePerNight: item.ratePerNight,
-              vat: 15,
-              total: item.total
-            })),
+            customerName: invoice.customerName,
+            items: invoice.items,
             subtotal: invoice.subtotal,
             vatAmount: invoice.tax,
             total: invoice.total
@@ -125,6 +89,7 @@ function EmailDialog({ invoice, onClose, isOpen }) {
         reader.readAsDataURL(blob);
       });
 
+      const apiUrl = 'http://37.27.142.148:3000';
       // Send to all selected recipients
       for (const recipient of selectedEmails) {
         const emailData = {
@@ -139,7 +104,7 @@ function EmailDialog({ invoice, onClose, isOpen }) {
           }]
         };
 
-        const response = await fetch('/api/email/send', {
+        const response = await fetch(`${apiUrl}/email/send`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

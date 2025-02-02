@@ -4,6 +4,7 @@ import InvoicePreview from '../components/InvoicePreview';
 import { InvoiceTemplate } from '../templates/InvoiceTemplate';
 import Settings from '../components/Settings';
 import EmailDialog from '../components/EmailDialog';
+import AddUser from '../components/AddUser';
 import { hotels } from '../data/hotels';
 import { pdf } from '@react-pdf/renderer';
 
@@ -20,7 +21,7 @@ function roundToNearestHalf(num) {
 function Dashboard() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const [selectedHotel, setSelectedHotel] = useState(hotels[0].id);
+  const [selectedHotel, setSelectedHotel] = useState('zanzibar-village');
   const [reservationNumber, setReservationNumber] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -30,6 +31,7 @@ function Dashboard() {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [selectedEmailInvoice, setSelectedEmailInvoice] = useState(null);
   const [shouldSendEmail, setShouldSendEmail] = useState(true);
+  const [showAddUser, setShowAddUser] = useState(false);
 
   const apiUrl = 'http://37.27.142.148:3000';
 
@@ -49,30 +51,32 @@ function Dashboard() {
       return;
     }
 
-    const selectedHotelData = hotels.find(h => h.id === selectedHotel);
-    
     try {
       const token = localStorage.getItem('token');
+      const selectedHotelData = hotels.find(h => h.id === selectedHotel);
       
-      console.log('Making API call to:', `${apiUrl}/ezee/bookings`);
-      console.log('Request payload:', {
+      console.log('Selected Hotel Details:', {
+        id: selectedHotelData.id,
+        name: selectedHotelData.name,
         hotelId: selectedHotelData.hotelId,
-        authKey: selectedHotelData.authKey,
-        bookingId: reservationNumber
+        authKey: selectedHotelData.authKey
       });
       
-      const response = await fetch(`${apiUrl}/ezee/bookings`, {
-        method: 'POST',
+      const apiEndpoint = `${apiUrl}/api/bookings/ezee/${reservationNumber}?hotel_id=${selectedHotelData.hotelId}&auth_key=${selectedHotelData.authKey}`;
+      console.log('Full API URL:', apiEndpoint);
+      console.log('Request Headers:', {
+        Authorization: 'Bearer ' + token.substring(0, 10) + '...',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      });
+      
+      const response = await fetch(apiEndpoint, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          hotelId: selectedHotelData.hotelId,
-          authKey: selectedHotelData.authKey,
-          bookingId: reservationNumber
-        })
+        }
       });
 
       if (!response.ok) {
@@ -81,31 +85,14 @@ function Dashboard() {
       }
 
       const bookingData = await response.json();
-      console.log('Raw booking data:', bookingData);
+      console.log('Raw booking data:', JSON.stringify(bookingData, null, 2));
       
-      if (!bookingData?.Reservations?.Reservation || !Array.isArray(bookingData.Reservations.Reservation) || bookingData.Reservations.Reservation.length === 0) {
+      if (!bookingData) {
         throw new Error('No booking data found for this reservation number');
       }
 
-      // Log detailed structure of first booking
-      console.log('Detailed first booking:', JSON.stringify(bookingData.Reservations.Reservation[0], null, 2));
-
-      // Process the first booking transaction
-      const firstBooking = bookingData.Reservations.Reservation[0];
-      
-      if (!firstBooking?.BookingTran || !Array.isArray(firstBooking.BookingTran) || firstBooking.BookingTran.length === 0) {
-        throw new Error('No booking transaction data found for this reservation');
-      }
-
-      // Get the first booking transaction
-      const bookingTran = firstBooking.BookingTran[0];
-      
-      // Get rental info details
-      const rentalInfo = bookingTran.RentalInfo;
-      const paymentDetails = bookingTran.PaymentDetail;
-
-      // Process all booking transactions
-      const lineItems = bookingData.Reservations.Reservation
+      // Process all bookings
+      const lineItems = bookingData.raw_response.Reservations.Reservation
         .filter(booking => {
           const bookingTran = booking.BookingTran[0];
           // Check if booking is valid (not cancelled and has a rate)
@@ -163,23 +150,21 @@ function Dashboard() {
       }
 
       // Calculate grand total from rounded line totals
-      const grandTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
-      const totalSubtotal = grandTotal / 1.15;
-      const totalVAT = grandTotal - totalSubtotal;
+      const total = lineItems.reduce((sum, item) => sum + item.total, 0);
+      const subtotal = total / 1.15;
+      const vatAmount = total - subtotal;
 
-      // Generate invoice from booking data
-      console.log('First booking:', firstBooking);
-      console.log('BookedBy:', firstBooking.BookedBy);
-      
-      const customerName = firstBooking.BookedBy;
-      console.log('Customer name being used:', customerName);
+      // Get guest details from first booking
+      const firstBooking = bookingData.raw_response.Reservations.Reservation[0];
+      const firstTran = firstBooking.BookingTran[0];
 
+      // Generate invoice
       const newInvoice = {
         id: Date.now().toString(),
         invoiceNumber: `INV-${Date.now()}`,
-        reservationNumber,
+        reservationNumber: bookingData.booking_id,
         date: new Date().toISOString().split('T')[0],
-        customerName,
+        customerName: `${firstBooking.Salutation} ${firstBooking.FirstName} ${firstBooking.LastName}`,
         customerEmail: firstBooking.Email || '',
         property: selectedHotelData.name,
         location: selectedHotelData.location,
@@ -189,15 +174,11 @@ function Dashboard() {
         phone: selectedHotelData.phone,
         accountNumber: selectedHotelData.accountNumber,
         swiftCode: selectedHotelData.swiftCode,
-        items: lineItems.map(item => ({
-          ...item,
-          ratePerNight: parseFloat(item.ratePerNight),
-          total: parseFloat(item.total)
-        })),
-        subtotal: totalSubtotal,
-        tax: totalVAT,
-        total: grandTotal,
-        notes: `Package: ${firstBooking.BookingTran[0].PackageName}`
+        items: lineItems,
+        subtotal: subtotal,
+        tax: vatAmount,
+        total: total,
+        notes: `Package: ${bookingData.room.package}, Source: ${bookingData.source}`
       };
 
       setInvoices(prev => [newInvoice, ...prev]);
@@ -211,7 +192,7 @@ function Dashboard() {
             date: new Date(newInvoice.date).toLocaleDateString('en-GB'),
             invoiceNumber: newInvoice.invoiceNumber,
             reservation: reservationNumber,
-            customerName: customerName,
+            customerName: newInvoice.customerName,
             items: newInvoice.items,
             subtotal: newInvoice.subtotal,
             vatAmount: newInvoice.tax,
@@ -304,6 +285,15 @@ function Dashboard() {
             </div>
             <div className="flex items-center gap-4">
               <button
+                onClick={() => setShowAddUser(!showAddUser)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                </svg>
+                {showAddUser ? 'Hide Add User' : 'Add User'}
+              </button>
+              <button
                 onClick={() => setShowSettings(true)}
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
               >
@@ -325,6 +315,12 @@ function Dashboard() {
           </div>
         </div>
       </nav>
+
+      {showAddUser && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <AddUser />
+        </div>
+      )}
 
       {/* Settings Modal */}
       <Settings isOpen={showSettings} onClose={() => setShowSettings(false)} />
