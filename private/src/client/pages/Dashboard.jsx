@@ -164,7 +164,7 @@ function Dashboard() {
         invoiceNumber: `INV-${Date.now()}`,
         reservationNumber: bookingData.booking_id,
         date: new Date().toISOString().split('T')[0],
-        customerName: `${firstBooking.Salutation} ${firstBooking.FirstName} ${firstBooking.LastName}`,
+        customerName: bookingData.source, // Using source/travel agent as bill to
         customerEmail: firstBooking.Email || '',
         property: selectedHotelData.name,
         location: selectedHotelData.location,
