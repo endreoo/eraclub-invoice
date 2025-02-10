@@ -10,6 +10,16 @@ export default defineConfig({
     hmr: {
       host: '37.27.142.148',
       port: 5172
+    },
+    proxy: {
+      '/auth': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/veraclub': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      }
     }
   },
   base: '/'
